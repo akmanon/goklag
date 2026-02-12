@@ -1,0 +1,28 @@
+kafka:
+  brokers:
+    - broker1:9092
+    - broker2:9092
+  version: 3.5.0
+  sasl:
+    mechanism: GSSAPI
+    kerberos:
+      realm: EXAMPLE.COM
+      service_name: kafka
+      username: user@EXAMPLE.COM
+      keytab_path: /etc/security/keytabs/user.keytab
+
+  consumers:
+    - group: group-1
+      topics:
+        - topic-a
+        - topic-b
+    - group: group-2
+      topics:
+        - topic-c
+        - topic-d
+
+server:
+  port: 9090
+  scrape_interval_seconds: 15
+  worker_pool_size: 16
+  request_timeout_seconds: 10
