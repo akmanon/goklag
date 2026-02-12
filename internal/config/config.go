@@ -38,10 +38,11 @@ type ConsumerBinding struct {
 }
 
 type ServerConfig struct {
-	Port                  int `mapstructure:"port"`
-	ScrapeIntervalSeconds int `mapstructure:"scrape_interval_seconds"`
-	WorkerPoolSize        int `mapstructure:"worker_pool_size"`
-	RequestTimeoutSeconds int `mapstructure:"request_timeout_seconds"`
+	Port                   int `mapstructure:"port"`
+	ScrapeIntervalSeconds  int `mapstructure:"scrape_interval_seconds"`
+	LagPollIntervalSeconds int `mapstructure:"lag_poll_interval_seconds"`
+	WorkerPoolSize         int `mapstructure:"worker_pool_size"`
+	RequestTimeoutSeconds  int `mapstructure:"request_timeout_seconds"`
 }
 
 func (c ServerConfig) ScrapeInterval() time.Duration {
@@ -52,6 +53,10 @@ func (c ServerConfig) RequestTimeout() time.Duration {
 	return time.Duration(c.RequestTimeoutSeconds) * time.Second
 }
 
+func (c ServerConfig) LagPollInterval() time.Duration {
+	return time.Duration(c.LagPollIntervalSeconds) * time.Second
+}
+
 func Load(path string) (*Config, error) {
 	v := viper.New()
 	v.SetConfigFile(path)
@@ -59,6 +64,7 @@ func Load(path string) (*Config, error) {
 
 	v.SetDefault("server.port", 9090)
 	v.SetDefault("server.scrape_interval_seconds", 15)
+	v.SetDefault("server.lag_poll_interval_seconds", 60)
 	v.SetDefault("server.request_timeout_seconds", 10)
 	v.SetDefault("server.worker_pool_size", defaultWorkerPoolSize())
 
@@ -119,6 +125,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Server.WorkerPoolSize <= 0 {
 		return fmt.Errorf("server.worker_pool_size must be > 0")
+	}
+	if c.Server.LagPollIntervalSeconds <= 0 {
+		return fmt.Errorf("server.lag_poll_interval_seconds must be > 0")
 	}
 	if c.Server.RequestTimeoutSeconds <= 0 {
 		return fmt.Errorf("server.request_timeout_seconds must be > 0")

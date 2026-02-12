@@ -49,6 +49,9 @@ go run ./cmd/app -config config.yaml
 
 See `config.yaml` for the full sample.
 
+- `server.lag_poll_interval_seconds` controls how often lag is collected.
+- Default lag polling interval is `60` seconds (1 minute).
+
 Required Kafka auth settings:
 
 - `kafka.sasl.mechanism: GSSAPI`

@@ -50,7 +50,7 @@ func main() {
 
 	collectAndPublish(rootCtx, collector, metricStore, cfg.Server.RequestTimeout(), logger)
 
-	ticker := time.NewTicker(cfg.Server.ScrapeInterval())
+	ticker := time.NewTicker(cfg.Server.LagPollInterval())
 	defer ticker.Stop()
 
 	run := true

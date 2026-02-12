@@ -24,5 +24,6 @@ kafka:
 server:
   port: 9090
   scrape_interval_seconds: 15
+  lag_poll_interval_seconds: 60
   worker_pool_size: 16
   request_timeout_seconds: 10
