@@ -70,6 +70,7 @@ Required Kafka auth settings:
 - `kafka.sasl.kerberos.service_name`
 - `kafka.sasl.kerberos.username`
 - `kafka.sasl.kerberos.keytab_path`
+- `kafka.sasl.kerberos.kerberos_config_path`
 
 ## Prometheus
 

@@ -10,6 +10,7 @@ kafka:
       service_name: kafka
       username: user@EXAMPLE.COM
       keytab_path: /etc/security/keytabs/user.keytab
+      kerberos_config_path: /etc/krb5.conf
 
   consumers:
     - group: group-1

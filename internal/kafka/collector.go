@@ -81,6 +81,7 @@ func NewCollector(cfg config.KafkaConfig, workers int, logger *zap.Logger) (*Col
 	scfg.Net.SASL.GSSAPI.Username = cfg.SASL.Kerberos.Username
 	scfg.Net.SASL.GSSAPI.Realm = cfg.SASL.Kerberos.Realm
 	scfg.Net.SASL.GSSAPI.KeyTabPath = cfg.SASL.Kerberos.KeytabPath
+	scfg.Net.SASL.GSSAPI.KerberosConfigPath = cfg.SASL.Kerberos.KerberosConfigPath
 	scfg.Net.SASL.GSSAPI.DisablePAFXFAST = true
 
 	client, err := sarama.NewClient(cfg.Brokers, scfg)

@@ -24,6 +24,7 @@ func TestLoad_DefaultLagPollInterval(t *testing.T) {
       service_name: kafka
       username: user@EXAMPLE.COM
       keytab_path: /tmp/user.keytab
+      kerberos_config_path: /etc/krb5.conf
   consumers:
     - group: group-1
       topics:
@@ -66,6 +67,7 @@ func TestValidate_InvalidLagPollInterval(t *testing.T) {
 					ServiceName: "kafka",
 					Username:    "user@EXAMPLE.COM",
 					KeytabPath:  "/tmp/user.keytab",
+					KerberosConfigPath: "/etc/krb5.conf",
 				},
 			},
 			Consumers: []ConsumerBinding{{Group: "group-1", Topics: []string{"topic-a"}}},

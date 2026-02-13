@@ -26,10 +26,11 @@ type SASLConfig struct {
 }
 
 type KerberosConfig struct {
-	Realm       string `mapstructure:"realm"`
-	ServiceName string `mapstructure:"service_name"`
-	Username    string `mapstructure:"username"`
-	KeytabPath  string `mapstructure:"keytab_path"`
+	Realm              string `mapstructure:"realm"`
+	ServiceName        string `mapstructure:"service_name"`
+	Username           string `mapstructure:"username"`
+	KeytabPath         string `mapstructure:"keytab_path"`
+	KerberosConfigPath string `mapstructure:"kerberos_config_path"`
 }
 
 type ConsumerBinding struct {
@@ -105,6 +106,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Kafka.SASL.Kerberos.KeytabPath == "" {
 		return fmt.Errorf("kafka.sasl.kerberos.keytab_path is required")
+	}
+	if c.Kafka.SASL.Kerberos.KerberosConfigPath == "" {
+		return fmt.Errorf("kafka.sasl.kerberos.kerberos_config_path is required")
 	}
 	if len(c.Kafka.Consumers) == 0 {
 		return fmt.Errorf("kafka.consumers is required")
