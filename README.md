@@ -39,6 +39,17 @@ go mod tidy
 go build ./cmd/app
 ```
 
+Using Makefile:
+
+```bash
+make test
+make build-linux
+```
+
+Linux production binary output:
+
+- `bin/goklag-linux-amd64`
+
 ## Run
 
 ```bash

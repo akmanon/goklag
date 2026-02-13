@@ -16,6 +16,12 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	version   = "dev"
+	commit    = "none"
+	buildDate = "unknown"
+)
+
 func main() {
 	configPath := flag.String("config", "config.yaml", "path to config file")
 	flag.Parse()
@@ -25,6 +31,11 @@ func main() {
 		panic(err)
 	}
 	defer func() { _ = logger.Sync() }()
+	logger.Info("starting goklag",
+		zap.String("version", version),
+		zap.String("commit", commit),
+		zap.String("build_date", buildDate),
+	)
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
