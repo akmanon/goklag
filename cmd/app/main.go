@@ -14,6 +14,7 @@ import (
 	"goklag/internal/server"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 var (
@@ -26,7 +27,9 @@ func main() {
 	configPath := flag.String("config", "config.yaml", "path to config file")
 	flag.Parse()
 
-	logger, err := zap.NewProduction()
+	logCfg := zap.NewProductionConfig()
+	logCfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	logger, err := logCfg.Build()
 	if err != nil {
 		panic(err)
 	}
