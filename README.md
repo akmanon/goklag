@@ -50,6 +50,21 @@ Linux production binary output:
 
 - `bin/goklag-linux-amd64`
 
+## Makefile Commands
+
+```bash
+make help
+```
+
+Available targets:
+
+- `make tidy` - download/update Go module dependencies.
+- `make test` - run all unit tests (`go test ./...`).
+- `make build` - build host-platform binary at `bin/goklag`.
+- `make build-linux` - build Linux amd64 production binary at `bin/goklag-linux-amd64`.
+- `make build-linux-arm64` - build Linux arm64 production binary at `bin/goklag-linux-arm64`.
+- `make clean` - remove build artifacts from `bin/`.
+
 ## Run
 
 ```bash
