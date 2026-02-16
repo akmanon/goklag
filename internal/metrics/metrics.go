@@ -64,6 +64,8 @@ func NewStore() *Store {
 		store.groupLag,
 		store.latestOffset,
 		store.committedOffset,
+		prometheus.NewGoCollector(),
+		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
 	)
 
 	return store
