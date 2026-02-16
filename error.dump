@@ -1,1 +1,1 @@
-
+"error":"kafka: client has run out of available brokers to talk to: 2 errors occurred:\n\t* [Root cause: KDC_Error] KDC_Error: AS Exchange Error: kerberos error response from KDC: KRB Error: (6) KDC_ERR_C_PRINCIPAL_UNKNOWN Client not found in Kerberos database - CLIENT_NOT_FOUND\n\t* [Root cause: KDC_Error] KDC_Error: AS Exchange Error: kerberos error response from KDC: KRB Error: (6) KDC_ERR_C_PRINCIPAL_UNKNOWN Client not found in Kerberos database - CLIENT_NOT_FOUND\n"
