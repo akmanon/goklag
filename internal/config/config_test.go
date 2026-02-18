@@ -63,10 +63,10 @@ func TestValidate_InvalidLagPollInterval(t *testing.T) {
 			SASL: SASLConfig{
 				Mechanism: "GSSAPI",
 				Kerberos: KerberosConfig{
-					Realm:       "EXAMPLE.COM",
-					ServiceName: "kafka",
-					Username:    "user@EXAMPLE.COM",
-					KeytabPath:  "/tmp/user.keytab",
+					Realm:              "EXAMPLE.COM",
+					ServiceName:        "kafka",
+					Username:           "user@EXAMPLE.COM",
+					KeytabPath:         "/tmp/user.keytab",
 					KerberosConfigPath: "/etc/krb5.conf",
 				},
 			},
@@ -86,6 +86,45 @@ func TestValidate_InvalidLagPollInterval(t *testing.T) {
 		t.Fatal("expected validation error, got nil")
 	}
 	if !strings.Contains(err.Error(), "server.lag_poll_interval_seconds") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidate_InvalidHDFSOffsetBinding(t *testing.T) {
+	t.Parallel()
+	cfg := &Config{
+		Kafka: KafkaConfig{
+			Brokers: []string{"broker1:9092"},
+			Version: "3.5.0",
+			SASL: SASLConfig{
+				Mechanism: "GSSAPI",
+				Kerberos: KerberosConfig{
+					Realm:              "EXAMPLE.COM",
+					ServiceName:        "kafka",
+					Username:           "user@EXAMPLE.COM",
+					KeytabPath:         "/tmp/user.keytab",
+					KerberosConfigPath: "/etc/krb5.conf",
+				},
+			},
+			Consumers: []ConsumerBinding{{Group: "group-1", Topics: []string{"topic-a"}}},
+			HDFSOffset: []HDFSOffsetBinding{
+				{Topic: "topic-a", Path: ""},
+			},
+		},
+		Server: ServerConfig{
+			Port:                   9090,
+			ScrapeIntervalSeconds:  15,
+			LagPollIntervalSeconds: 60,
+			WorkerPoolSize:         8,
+			RequestTimeoutSeconds:  10,
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error, got nil")
+	}
+	if !strings.Contains(err.Error(), "kafka.hdfs_offset[0].path") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

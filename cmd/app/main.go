@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"goklag/internal/config"
+	"goklag/internal/hdfsoffset"
 	"goklag/internal/kafka"
 	"goklag/internal/metrics"
 	"goklag/internal/server"
@@ -62,7 +63,20 @@ func main() {
 	rootCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	collectAndPublish(rootCtx, collector, metricStore, cfg.Server.RequestTimeout(), logger)
+	runCollect := func(ctx context.Context) {
+		collectAndPublish(ctx, collector, metricStore, cfg.Server.RequestTimeout(), logger)
+	}
+	if len(cfg.Kafka.HDFSOffset) > 0 {
+		hdfsReader := hdfsoffset.NewReader()
+		logger.Info("using hdfs committed offsets for lag collection",
+			zap.Int("hdfs_topics", len(cfg.Kafka.HDFSOffset)),
+		)
+		runCollect = func(ctx context.Context) {
+			collectAndPublishHDFS(ctx, collector, hdfsReader, metricStore, cfg.Server.RequestTimeout(), logger)
+		}
+	}
+
+	runCollect(rootCtx)
 
 	ticker := time.NewTicker(cfg.Server.LagPollInterval())
 	defer ticker.Stop()
@@ -73,7 +87,7 @@ func main() {
 		case <-rootCtx.Done():
 			run = false
 		case <-ticker.C:
-			collectAndPublish(rootCtx, collector, metricStore, cfg.Server.RequestTimeout(), logger)
+			runCollect(rootCtx)
 		}
 	}
 
@@ -104,6 +118,31 @@ func collectAndPublish(
 
 	metricStore.Update(snapshot)
 	logger.Info("collection completed",
+		zap.Int("partition_lag_metrics", len(snapshot.PartitionLag)),
+		zap.Int("topic_lag_metrics", len(snapshot.TopicLag)),
+		zap.Int("group_lag_metrics", len(snapshot.GroupLag)),
+	)
+}
+
+func collectAndPublishHDFS(
+	rootCtx context.Context,
+	collector *kafka.Collector,
+	reader kafka.HDFSOffsetReader,
+	metricStore *metrics.Store,
+	timeout time.Duration,
+	logger *zap.Logger,
+) {
+	ctx, cancel := context.WithTimeout(rootCtx, timeout)
+	defer cancel()
+
+	snapshot, err := collector.CollectHDFS(ctx, reader)
+	if err != nil {
+		logger.Warn("hdfs collection failed", zap.Error(err))
+		return
+	}
+
+	metricStore.Update(snapshot)
+	logger.Info("hdfs collection completed",
 		zap.Int("partition_lag_metrics", len(snapshot.PartitionLag)),
 		zap.Int("topic_lag_metrics", len(snapshot.TopicLag)),
 		zap.Int("group_lag_metrics", len(snapshot.GroupLag)),

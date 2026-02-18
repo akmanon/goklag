@@ -7,7 +7,7 @@
 1. Loads configured consumer groups and topics.
 2. Resolves partitions for each topic.
 3. Fetches latest (head) offsets per partition from broker leaders.
-4. Fetches committed offsets per consumer group.
+4. Fetches committed offsets per consumer group (Kafka mode) or from HDFS offset files (Spark mode).
 5. Computes lag at partition/topic/group levels.
 6. Publishes results as Prometheus gauges.
 7. Serves `/metrics` and `/healthz` over HTTP.
@@ -39,6 +39,8 @@ The service uses a single shared Sarama client (connection reuse), bounded worke
   - Strongly typed config schema, defaults, validation.
 - `internal/kafka`
   - Kafka client construction and lag collection logic.
+- `internal/hdfsoffset`
+  - HDFS CLI integration (`hdfs dfs -ls/-cat`) and committed offset parsing.
 - `internal/metrics`
   - Prometheus gauge vectors and safe updates/cleanup.
 - `internal/server`
@@ -50,8 +52,8 @@ The service uses a single shared Sarama client (connection reuse), bounded worke
 2. `NewCollector()` builds Sarama client with GSSAPI keytab auth.
 3. `metrics.NewStore()` registers gauge vectors.
 4. `server.New()` starts `/metrics` and `/healthz` server.
-5. Scheduler triggers `collectAndPublish()` every `lag_poll_interval_seconds`.
-6. `Collector.Collect()` returns a `kafka.Snapshot`.
+5. Scheduler triggers periodic collection every `lag_poll_interval_seconds`.
+6. `Collector.Collect()` (Kafka committed offsets) or `Collector.CollectHDFS()` (HDFS committed offsets) returns a `kafka.Snapshot`.
 7. `Store.Update(snapshot)` updates/deletes metric series atomically.
 
 ## 4. Runtime Workflow (Low-Level)
@@ -66,7 +68,7 @@ The service uses a single shared Sarama client (connection reuse), bounded worke
 6. Start HTTP server in background goroutine.
 7. Create root context tied to SIGINT/SIGTERM.
 8. Execute one immediate collection before ticker loop.
-9. Enter periodic collection loop (`lag_poll_interval_seconds`).
+9. Enter periodic collection loop (`lag_poll_interval_seconds`), selecting Kafka or HDFS committed-offset mode based on config.
 
 ### 4.2 Collection Sequence
 
@@ -77,15 +79,13 @@ For each collection tick:
 3. Fetch partitions per topic (parallel bounded workers + metadata retry/backoff).
 4. Group topic-partitions by leader broker.
 5. Fetch latest offsets in broker batches (`OffsetRequest`).
-6. For each configured group:
-   - fetch coordinator
-   - fetch committed offsets in one group request
-   - compute lag per partition
-   - sum topic lag
-   - sum group lag
-7. Return `Snapshot`.
-8. Push snapshot to Prometheus store.
-9. Remove stale metric series no longer present in current snapshot.
+6. Resolve committed offsets:
+   - Kafka mode: fetch committed offsets from group coordinator requests.
+   - HDFS mode: list HDFS offset directories, select max numeric file, and parse committed offsets from JSON.
+7. Compute lag per partition and aggregate topic/group totals.
+8. Return `Snapshot`.
+9. Push snapshot to Prometheus store.
+10. Remove stale metric series no longer present in current snapshot.
 
 ### 4.3 Shutdown Sequence
 
@@ -112,6 +112,9 @@ For each collection tick:
   - `Consumers []ConsumerBinding`
     - `Group`
     - `Topics []string`
+  - `HDFSOffset []HDFSOffsetBinding` (optional)
+    - `Topic`
+    - `Path` (HDFS directory containing numeric offset files)
 - `Server`
   - `Port`
   - `ScrapeIntervalSeconds`
@@ -121,7 +124,7 @@ For each collection tick:
 
 ### 5.1 Validation Strategy
 
-`Config.Validate()` enforces required fields and positive intervals/sizes. The process fails fast on invalid config.
+`Config.Validate()` enforces required fields and positive intervals/sizes. `kafka.hdfs_offset` is optional, but if provided each binding requires non-empty `topic` and `path`, and topic keys must be unique.
 
 ### 5.2 Defaults
 
@@ -182,7 +185,17 @@ This design minimizes request count and improves scale at high partition counts.
 3. Use request version determined by `offsetFetchVersion()` based on broker version.
 4. Parse blocks; tolerate `ErrUnknownTopicOrPartition` without hard failure.
 
-## 6.5 Lag Computation
+## 6.5 HDFS Committed Offset Fetching (Spark Mode)
+
+When `kafka.hdfs_offset` is configured, committed offsets are read from HDFS instead of Kafka consumer group coordinators.
+
+1. For each configured topic/path, execute `hdfs dfs -ls <path>`.
+2. Parse entries, keep only numeric filenames, and pick the highest integer key.
+3. Execute `hdfs dfs -cat <path>/<max_file>`.
+4. Parse JSON of shape `{"topic": {"partition": "offset"}}`.
+5. Map committed offsets by partition and compute lag using the existing lag formula.
+
+## 6.6 Lag Computation
 
 `computeLag(latest, committed)`:
 
@@ -248,6 +261,7 @@ Timeout hardening on `http.Server`:
 - Metadata failures: warn + retry/backoff + cache fallback.
 - Latest offset partial failures: logged, snapshot still returned.
 - Group offset failures: warn and continue other groups.
+- HDFS command/parse failures: warn and continue other topics.
 - HTTP server fatal only on unexpected listen failure.
 
 This prioritizes service continuity and observability over strict fail-stop behavior during transient broker issues.
@@ -259,6 +273,7 @@ This prioritizes service continuity and observability over strict fail-stop beha
 - Single Sarama client reused globally.
 - Broker-level batching for latest offsets.
 - Per-group batch fetch for committed offsets.
+- Optional HDFS CLI-based committed offset retrieval for Spark jobs with ephemeral consumer groups.
 - Bounded workers for metadata and broker requests.
 - Maps pre-sized for common snapshot dimensions.
 
@@ -287,6 +302,11 @@ The architecture supports large topologies (100+ groups, 1000+ partitions) by re
   - Calls collector, then metrics update.
   - Logs metric cardinalities for cycle visibility.
 
+- `collectAndPublishHDFS(rootCtx, collector, reader, metricStore, timeout, logger)`
+  - Creates per-cycle timeout context.
+  - Calls HDFS-based collector path, then metrics update.
+  - Logs metric cardinalities for cycle visibility.
+
 ## 13.2 `internal/config/config.go`
 
 - `(ServerConfig) ScrapeInterval()`
@@ -309,7 +329,7 @@ The architecture supports large topologies (100+ groups, 1000+ partitions) by re
 - `defaultWorkerPoolSize()`
   - Computes CPU-based default worker count with `[8,64]` clamp.
 
-## 13.3 `internal/kafka/collector.go`
+## 13.3 `internal/kafka` (`collector.go`, `hdfs_lag.go`)
 
 - `NewCollector(cfg, workers, logger)`
   - Parses Kafka version.
@@ -322,6 +342,10 @@ The architecture supports large topologies (100+ groups, 1000+ partitions) by re
 - `(*Collector) Collect(ctx)`
   - End-to-end lag collection for all configured groups/topics.
   - Produces snapshot maps for all metric dimensions.
+
+- `(*Collector) CollectHDFS(ctx, reader)`
+  - End-to-end lag collection using Kafka latest offsets plus HDFS committed offsets.
+  - Produces snapshot maps using synthetic group label `spark-hdfs`.
 
 - `(*Collector) loadPartitions(ctx, topics)`
   - Parallel topic partition resolution with worker pool.
@@ -347,7 +371,21 @@ The architecture supports large topologies (100+ groups, 1000+ partitions) by re
 - `min(a,b)`
   - Local helper for worker count decisions.
 
-## 13.4 `internal/metrics/metrics.go`
+## 13.4 `internal/hdfsoffset/reader.go`
+
+- `NewReader()`
+  - Constructs HDFS CLI reader using `hdfs` binary.
+
+- `(*Reader) ReadTopicOffsets(ctx, topic, basePath)`
+  - Lists HDFS path, selects max numeric offset file, reads file contents, parses committed offsets by partition.
+
+- `latestOffsetFilePath(lsOutput)`
+  - Extracts the latest numeric filename from `hdfs dfs -ls` output.
+
+- `parseTopicOffsets(content, topic)`
+  - Parses topic-partition offsets from JSON payload.
+
+## 13.5 `internal/metrics/metrics.go`
 
 - `NewStore()`
   - Creates registry and gauge vectors.
@@ -363,7 +401,7 @@ The architecture supports large topologies (100+ groups, 1000+ partitions) by re
 - `join2/split2/join3/split3`
   - Internal label-key encoding helpers for stale-series diffing.
 
-## 13.5 `internal/server/server.go`
+## 13.6 `internal/server/server.go`
 
 - `New(port, registry, logger)`
   - Builds hardened HTTP server and route mux.
@@ -381,6 +419,7 @@ Current tests validate:
 
 - Config defaults and lag polling validation.
 - Lag math and configured topic normalization.
+- HDFS offset filename selection and JSON parsing behavior.
 - Metrics update + stale series cleanup.
 
 Potential future tests:

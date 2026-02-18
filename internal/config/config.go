@@ -14,10 +14,11 @@ type Config struct {
 }
 
 type KafkaConfig struct {
-	Brokers   []string          `mapstructure:"brokers"`
-	Version   string            `mapstructure:"version"`
-	SASL      SASLConfig        `mapstructure:"sasl"`
-	Consumers []ConsumerBinding `mapstructure:"consumers"`
+	Brokers    []string            `mapstructure:"brokers"`
+	Version    string              `mapstructure:"version"`
+	SASL       SASLConfig          `mapstructure:"sasl"`
+	Consumers  []ConsumerBinding   `mapstructure:"consumers"`
+	HDFSOffset []HDFSOffsetBinding `mapstructure:"hdfs_offset"`
 }
 
 type SASLConfig struct {
@@ -36,6 +37,11 @@ type KerberosConfig struct {
 type ConsumerBinding struct {
 	Group  string   `mapstructure:"group"`
 	Topics []string `mapstructure:"topics"`
+}
+
+type HDFSOffsetBinding struct {
+	Topic string `mapstructure:"topic"`
+	Path  string `mapstructure:"path"`
 }
 
 type ServerConfig struct {
@@ -120,6 +126,19 @@ func (c *Config) Validate() error {
 		if len(binding.Topics) == 0 {
 			return fmt.Errorf("kafka.consumers[%d].topics is required", i)
 		}
+	}
+	seenHDFSOffsetTopics := make(map[string]struct{}, len(c.Kafka.HDFSOffset))
+	for i, binding := range c.Kafka.HDFSOffset {
+		if binding.Topic == "" {
+			return fmt.Errorf("kafka.hdfs_offset[%d].topic is required", i)
+		}
+		if binding.Path == "" {
+			return fmt.Errorf("kafka.hdfs_offset[%d].path is required", i)
+		}
+		if _, exists := seenHDFSOffsetTopics[binding.Topic]; exists {
+			return fmt.Errorf("kafka.hdfs_offset[%d].topic must be unique: %s", i, binding.Topic)
+		}
+		seenHDFSOffsetTopics[binding.Topic] = struct{}{}
 	}
 	if c.Server.Port <= 0 {
 		return fmt.Errorf("server.port must be > 0")

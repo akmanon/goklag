@@ -5,6 +5,7 @@ Production-grade Golang service for monitoring Apache Kafka consumer lag and exp
 ## Features
 
 - Sarama Kafka client with SASL/GSSAPI (Kerberos) keytab auth
+- Optional Spark mode using HDFS committed offsets (`hdfs dfs -ls/-cat`)
 - Single shared Kafka client instance
 - Bounded worker pools for metadata and broker offset batches
 - Exponential backoff retries on metadata fetch failures
@@ -25,7 +26,9 @@ Production-grade Golang service for monitoring Apache Kafka consumer lag and exp
 ```text
 cmd/app/main.go
 internal/config/config.go
+internal/hdfsoffset/reader.go
 internal/kafka/collector.go
+internal/kafka/hdfs_lag.go
 internal/metrics/metrics.go
 internal/server/server.go
 config.yaml
@@ -87,6 +90,20 @@ Required Kafka auth settings:
 - `kafka.sasl.kerberos.keytab_path`
 - `kafka.sasl.kerberos.kerberos_config_path`
 
+Optional Spark/HDFS committed offset settings:
+
+```yaml
+kafka:
+  hdfs_offset:
+    - topic: topic-a
+      path: /jobs/appname/offset/
+```
+
+- `hdfs_offset` is optional and backward-compatible with existing configs.
+- For each configured topic, the service lists `path`, selects the highest numeric filename, then reads JSON offsets from that file.
+- If `hdfs_offset` is configured, lag is computed as `latest Kafka offset - committed HDFS offset`.
+- Runtime dependency: `hdfs` CLI must be available in the process environment (`hdfs dfs ...`).
+
 ## Prometheus
 
 Sample scrape config is available in `prometheus-scrape.yml`.
@@ -96,3 +113,4 @@ Sample scrape config is available in `prometheus-scrape.yml`.
 - Lag is computed as `max(latest_offset - committed_offset, 0)`.
 - If a committed offset is missing (`-1`), lag falls back to latest offset.
 - Unknown/missing topics are logged and skipped without crashing the process.
+- In HDFS mode, metrics use synthetic group label `spark-hdfs`.

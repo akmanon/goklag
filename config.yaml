@@ -22,6 +22,10 @@ kafka:
         - topic-c
         - topic-d
 
+  hdfs_offset:
+    - topic: topic-a
+      path: /jobs/appname/offset/
+
 server:
   port: 9090
   scrape_interval_seconds: 15
