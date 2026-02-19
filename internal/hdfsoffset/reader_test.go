@@ -14,14 +14,16 @@ func TestLatestOffsetFilePath(t *testing.T) {
 -rw-r--r-- 1 hdfs supergroup 8 2026-02-18 00:03 /jobs/appname/offset/7655
 `)
 
-	got, err := latestOffsetFilePath(input)
+	got, err := latestOffsetFile(input)
 	if err != nil {
-		t.Fatalf("latestOffsetFilePath() error = %v", err)
+		t.Fatalf("latestOffsetFile() error = %v", err)
 	}
 
-	want := "/jobs/appname/offset/7656"
-	if got != want {
-		t.Fatalf("latestOffsetFilePath() = %q, want %q", got, want)
+	if got.path != "/jobs/appname/offset/7656" {
+		t.Fatalf("latestOffsetFile().path = %q, want %q", got.path, "/jobs/appname/offset/7656")
+	}
+	if got.size != 8 {
+		t.Fatalf("latestOffsetFile().size = %d, want %d", got.size, 8)
 	}
 }
 
@@ -32,9 +34,22 @@ func TestLatestOffsetFilePath_NoNumericFiles(t *testing.T) {
 -rw-r--r-- 1 hdfs supergroup 8 2026-02-18 00:00 /jobs/appname/offset/abc
 `)
 
-	_, err := latestOffsetFilePath(input)
+	_, err := latestOffsetFile(input)
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestValidateOffsetFileSize(t *testing.T) {
+	t.Parallel()
+
+	if err := validateOffsetFileSize(offsetFile{path: "/jobs/appname/offset/7656", size: maxOffsetFileSizeBytes - 1}); err != nil {
+		t.Fatalf("expected no error for size below limit, got %v", err)
+	}
+
+	err := validateOffsetFileSize(offsetFile{path: "/jobs/appname/offset/7657", size: maxOffsetFileSizeBytes})
+	if err == nil {
+		t.Fatal("expected error for size at limit, got nil")
 	}
 }
 

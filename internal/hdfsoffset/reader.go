@@ -15,6 +15,13 @@ type Reader struct {
 	binary string
 }
 
+const maxOffsetFileSizeBytes int64 = 1 << 20
+
+type offsetFile struct {
+	path string
+	size int64
+}
+
 func NewReader() *Reader {
 	return &Reader{binary: "hdfs"}
 }
@@ -25,19 +32,22 @@ func (r *Reader) ReadTopicOffsets(ctx context.Context, topic, basePath string) (
 		return nil, fmt.Errorf("list hdfs offset path %q: %w", basePath, err)
 	}
 
-	offsetFilePath, err := latestOffsetFilePath(lsOutput)
+	file, err := latestOffsetFile(lsOutput)
 	if err != nil {
 		return nil, fmt.Errorf("select latest offset file in %q: %w", basePath, err)
 	}
+	if err := validateOffsetFileSize(file); err != nil {
+		return nil, err
+	}
 
-	content, err := r.run(ctx, "dfs", "-cat", offsetFilePath)
+	content, err := r.run(ctx, "dfs", "-cat", file.path)
 	if err != nil {
-		return nil, fmt.Errorf("read hdfs offset file %q: %w", offsetFilePath, err)
+		return nil, fmt.Errorf("read hdfs offset file %q: %w", file.path, err)
 	}
 
 	offsets, err := parseTopicOffsets(content, topic)
 	if err != nil {
-		return nil, fmt.Errorf("parse hdfs offset file %q: %w", offsetFilePath, err)
+		return nil, fmt.Errorf("parse hdfs offset file %q: %w", file.path, err)
 	}
 
 	return offsets, nil
@@ -57,11 +67,11 @@ func (r *Reader) run(ctx context.Context, args ...string) ([]byte, error) {
 	return output, nil
 }
 
-func latestOffsetFilePath(lsOutput []byte) (string, error) {
+func latestOffsetFile(lsOutput []byte) (offsetFile, error) {
 	scanner := bufio.NewScanner(strings.NewReader(string(lsOutput)))
 	var (
 		maxValue int64
-		maxPath  string
+		selected offsetFile
 		hasValue bool
 	)
 
@@ -72,7 +82,7 @@ func latestOffsetFilePath(lsOutput []byte) (string, error) {
 		}
 
 		fields := strings.Fields(line)
-		if len(fields) == 0 {
+		if len(fields) < 8 {
 			continue
 		}
 
@@ -82,22 +92,26 @@ func latestOffsetFilePath(lsOutput []byte) (string, error) {
 		if err != nil {
 			continue
 		}
+		size, err := strconv.ParseInt(fields[len(fields)-4], 10, 64)
+		if err != nil {
+			continue
+		}
 
 		if !hasValue || value > maxValue {
 			hasValue = true
 			maxValue = value
-			maxPath = candidatePath
+			selected = offsetFile{path: candidatePath, size: size}
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("scan hdfs ls output: %w", err)
+		return offsetFile{}, fmt.Errorf("scan hdfs ls output: %w", err)
 	}
 	if !hasValue {
-		return "", fmt.Errorf("no numeric offset files found")
+		return offsetFile{}, fmt.Errorf("no numeric offset files found")
 	}
 
-	return maxPath, nil
+	return selected, nil
 }
 
 func parseTopicOffsets(content []byte, topic string) (map[int32]int64, error) {
@@ -145,4 +159,11 @@ func parseOffset(raw json.RawMessage) (int64, error) {
 	}
 
 	return 0, fmt.Errorf("unsupported offset value: %s", string(raw))
+}
+
+func validateOffsetFileSize(file offsetFile) error {
+	if file.size >= maxOffsetFileSizeBytes {
+		return fmt.Errorf("offset file %q is too large: %d bytes (must be < %d bytes)", file.path, file.size, maxOffsetFileSizeBytes)
+	}
+	return nil
 }
