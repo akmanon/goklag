@@ -7,6 +7,7 @@ COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)
+BUILD_SUFFIX := $(COMMIT)
 
 .PHONY: help tidy test build build-linux build-linux-arm64 clean
 
@@ -26,13 +27,13 @@ test:
 	go test ./...
 
 build: | $(BIN_DIR)
-	go build -trimpath -o $(BIN_DIR)/$(APP_NAME) $(CMD_PATH)
+	go build -trimpath -o $(BIN_DIR)/$(APP_NAME)-$(BUILD_SUFFIX) $(CMD_PATH)
 
 build-linux: | $(BIN_DIR)
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP_NAME)-linux-amd64 $(CMD_PATH)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP_NAME)-linux-amd64-$(BUILD_SUFFIX) $(CMD_PATH)
 
 build-linux-arm64: | $(BIN_DIR)
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP_NAME)-linux-arm64 $(CMD_PATH)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP_NAME)-linux-arm64-$(BUILD_SUFFIX) $(CMD_PATH)
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
