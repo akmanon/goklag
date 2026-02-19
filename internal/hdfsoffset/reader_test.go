@@ -79,3 +79,23 @@ func TestParseTopicOffsets_MissingTopic(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 }
+
+func TestParseTopicOffsets_SparkCheckpointThreeLineFormat(t *testing.T) {
+	t.Parallel()
+
+	content := []byte(`v1
+{"batchWatermarkMs":0,"batchTimestampMs":1771487442188,"conf":{"spark.sql.streaming.stateStore.providerClass":"org.apache.spark.sql.execution.streaming.state.HDFSBackedStateStoreProvider"}}
+{"topic_name":{"2":33443953,"5":1800190,"4":1781233,"1":33448138,"3":1787026,"0":33423016}}`)
+
+	offsets, err := parseTopicOffsets(content, "topic_name")
+	if err != nil {
+		t.Fatalf("parseTopicOffsets() error = %v", err)
+	}
+
+	if got := offsets[0]; got != 33423016 {
+		t.Fatalf("partition 0 offset = %d, want 33423016", got)
+	}
+	if got := offsets[5]; got != 1800190 {
+		t.Fatalf("partition 5 offset = %d, want 1800190", got)
+	}
+}

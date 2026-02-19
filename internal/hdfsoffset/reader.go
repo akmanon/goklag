@@ -115,9 +115,9 @@ func latestOffsetFile(lsOutput []byte) (offsetFile, error) {
 }
 
 func parseTopicOffsets(content []byte, topic string) (map[int32]int64, error) {
-	raw := make(map[string]map[string]json.RawMessage)
-	if err := json.Unmarshal(content, &raw); err != nil {
-		return nil, fmt.Errorf("unmarshal json: %w", err)
+	raw, err := decodeOffsetsPayload(content)
+	if err != nil {
+		return nil, err
 	}
 
 	rawTopicOffsets, ok := raw[topic]
@@ -166,4 +166,26 @@ func validateOffsetFileSize(file offsetFile) error {
 		return fmt.Errorf("offset file %q is too large: %d bytes (must be < %d bytes)", file.path, file.size, maxOffsetFileSizeBytes)
 	}
 	return nil
+}
+
+func decodeOffsetsPayload(content []byte) (map[string]map[string]json.RawMessage, error) {
+	raw := make(map[string]map[string]json.RawMessage)
+	if err := json.Unmarshal(content, &raw); err == nil {
+		return raw, nil
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+
+		candidate := make(map[string]map[string]json.RawMessage)
+		if err := json.Unmarshal([]byte(line), &candidate); err == nil {
+			return candidate, nil
+		}
+	}
+
+	return nil, fmt.Errorf("unmarshal json: unable to decode offsets payload")
 }

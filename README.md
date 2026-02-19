@@ -103,6 +103,12 @@ kafka:
 - For each configured topic, the service lists `path`, selects the highest numeric filename, then reads JSON offsets from that file.
 - If `hdfs_offset` is configured, lag is computed as `latest Kafka offset - committed HDFS offset`.
 - Runtime dependency: `hdfs` CLI must be available in the process environment (`hdfs dfs ...`).
+- Supported HDFS offset file payloads:
+  - Single JSON object: `{"topic_name":{"0":123,"1":"456"}}`
+  - Spark checkpoint 3-line format:
+    - `v1`
+    - batch metadata JSON
+    - offsets JSON (last line), e.g. `{"topic_name":{"0":123,"1":456}}`
 
 ## Prometheus
 
