@@ -30,6 +30,7 @@ build: | $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/$(APP_NAME)-$(BUILD_SUFFIX) $(CMD_PATH)
 
 build-linux: | $(BIN_DIR)
+	rm -f $(BIN_DIR)/$(APP_NAME)-linux-amd64 $(BIN_DIR)/$(APP_NAME)-linux-amd64-*
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP_NAME)-linux-amd64-$(BUILD_SUFFIX) $(CMD_PATH)
 
 build-linux-arm64: | $(BIN_DIR)
